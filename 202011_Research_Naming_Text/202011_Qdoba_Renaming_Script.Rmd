@@ -1,0 +1,180 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Setup
+
+## Libraries
+```{r}
+library(tidyverse)
+```
+
+## Paths and Parameters
+```{r}
+# Paths
+data.path <- "data_to_score//"
+fun.path <- "files_for_scoring//"
+out.path <- "data_out//"
+
+# Parameters
+name.of.data.file <- "Openends_20201110.xlsx"
+name.of.lookup.file <- "Qdoba_brand_flags_v20201110.csv"
+
+# Columns
+q1_cols <- c( "response_id" , "q1_1" )
+q2_cols <- c( "response_id" , "q1_2" )
+q3_cols <- c( "response_id" , "q1_3" )
+q4_cols <- c( "response_id" , "q1_4" )
+q5_cols <- c( "response_id" , "q1_5" )
+q_cols <- list( q1_cols , q2_cols , q3_cols , q4_cols , q5_cols )
+```
+
+## Source Funs
+```{r}
+source( paste0( fun.path , "cooper_rename_functions.R" ) )
+```
+
+# Data In
+## Lookup In
+```{r}
+data_stack_d <- data.table::fread( paste0( fun.path , name.of.lookup.file ) , data.table=F ) %>%
+    rename( brand_input = clean_response )
+
+data_stack_d %>% filter(brand_input == "")
+```
+
+## Data to score in
+```{r}
+# Open Ends with coding in
+d <- readxl::read_xlsx( paste0( data.path , name.of.data.file ) )
+
+# Rename
+d.1 <- d %>%
+    janitor::clean_names()
+```
+
+# Clean data to score
+```{r}
+# Initiate list
+out.list <- list()
+
+# Apply function from source( cooper_rename_functions.R )
+out.list.2 <- break.them.up.fun( d.1 )
+
+# Apply clean text function from source( cooper_rename_functions.R )
+out.list.3 <- out.list.2
+
+for( i in 1:length(q_cols) ){
+    
+    # Get the list element
+    temp.df <- out.list.2[[i]]
+    
+    # Clean the text
+    temp.col <- as.data.frame( lapply( out.list.2[[i]][2] , clean.text ) ,
+                               stringsAsFactors = F )
+    
+    # Create it as 3rd variable
+    temp.df.2 <- temp.df %>%
+        mutate( brand_input = temp.col[,1])
+    
+    # Save it back into the out.list.3
+    out.list.3[[i]] <- temp.df.2
+    
+}
+
+```
+
+## Scratch
+```{r}
+out.list.4[[5]]
+data_stack_d
+```
+
+# Flag the brands now
+```{r}
+out.list.4 <- out.list.3 
+for( i in 1:length( out.list.4 ) ){
+    out.list.4[[i]] <- flag.brand.fun.cart( data.in = out.list.3[[i]] , 
+                        data_stack_d = data_stack_d )
+}
+
+out.list.5 <- out.list.4 
+for( i in 1:length( out.list.5 ) ){
+    out.list.5[[i]] <- flag.brand.fun.append( out.list.4[[i]] ,
+                                              data_stack_d )
+}
+
+out.list.6 <- out.list.5
+for( i in 1:length( out.list.6 ) ){
+    out.list.6[[i]] <- out.list.3[[i]] %>%
+        left_join( out.list.5[[i]] , by=c("brand_input" = "brand_input_data"))  %>%
+        janitor::clean_names() 
+    
+}
+
+out.list.7 <- out.list.6
+for( i in 1:length( out.list.7 ) ){
+    out.list.7[[i]][ is.na(out.list.7[[i]])==T ] <- ""
+}
+
+# Fix names
+out.list.8 <- out.list.7
+for( i in 1:length( out.list.8 ) ){
+    temp.df <- out.list.8[[i]]
+    name.want <- str_sub( names( temp.df )[2], 1, 4)
+    dim.want <- ncol(temp.df)-3
+    names.need <- paste0( name.want, "_" , 1:dim.want , "_code")
+    names( temp.df )[4:ncol(temp.df)] <- names.need
+    out.list.8[[i]] <- temp.df
+}
+
+# Remove brand_input
+out.list.9 <- out.list.8
+for( i in 1:length( out.list.9 )){
+    out.list.9[[i]] <- out.list.8[[i]] %>%
+        select( -brand_input )
+}
+
+# Join to themselves
+out.final <- out.list.9[[1]] %>%
+    left_join( out.list.9[[2]] , by="response_id" ) %>%
+    left_join( out.list.9[[3]] , by="response_id" ) %>%
+    left_join( out.list.9[[4]] , by="response_id" ) %>%
+    left_join( out.list.9[[5]] , by="response_id" ) 
+
+# Check dim == dim
+dim(out.final)[1] == dim(d)[1]
+
+# Some spot checks
+d;out.final
+
+# Out
+write.csv( out.final , paste0( out.path , gsub(".xlsx", "", name.of.data.file) , "_Qdoba_Scored_Data_I_Heart_Christian.csv" ) , row.names=F )
+```
+
+# Hold
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

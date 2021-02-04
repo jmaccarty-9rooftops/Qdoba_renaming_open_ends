@@ -1,0 +1,151 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Setup
+## Libs and sources
+```{r}
+# Libs
+library( tidyverse )
+
+# Source
+source( "Qdoba_text_cleaning_functions.R" )
+```
+
+# Data In
+```{r}
+# Responses
+data.r <- readxl::read_xlsx( "Openends.xlsx" , sheet="Openends" ) %>%
+    janitor::clean_names() %>%
+    select( response_id:q1_5 )
+
+# brands
+data.b <- readxl::read_xlsx( "Openends.xlsx" , sheet="Brands" ,col_names=F ) %>%
+    janitor::clean_names() %>%
+    rename( brands = x1 ) %>%
+    mutate( brand_flag = row_number() )
+
+# write brand lookup out
+write.csv( data.b , "qdoba_brand_lookup.csv" , row.names=F )
+```
+
+# Data Wrangle
+## To wide
+```{r}
+# To long
+data.r.1 <- data.r %>%
+    gather( question , response , -response_id )
+```
+
+## Clean text
+### Respondents
+```{r}
+# Clean respondent text as new column
+data.r.2 <- data.r.1 %>%
+    rowwise %>%
+    mutate( clean_response = clean.text( response ) )
+
+# Distinct on new column of clean_response and arrange
+clean_col <- data.r.2 %>%
+    distinct( clean_response ) %>%
+    arrange( clean_response )
+```
+
+### Brands
+```{r}
+# clean brands
+data.b.1 <- data.b %>%
+    rowwise %>%
+    mutate( clean_brands = clean.text( brands ) )
+```
+
+## Cartesian product
+```{r}
+# cart product
+cart.prod <- expand.grid( clean_col$clean_response ,
+                          data.b.1$clean_brands ) %>%
+    rename( input = Var1 ,
+            brand_lookup = Var2 ) %>%
+    data.frame( ) %>%
+    mutate( input = as.character( input ) ,
+            brand_lookup = as.character( brand_lookup ) )
+    
+```
+
+## String Dist
+```{r}
+# dist
+dist.df <- cart.prod %>%
+    mutate( string_dist = stringdist::stringdist( input , brand_lookup ) )
+
+# Filter for distance, left_join brnad lookup
+dist.df.1 <- dist.df %>%
+    filter( string_dist <= 3 ) %>%
+    left_join( data.b.1 %>% select( clean_brands , brand_flag ) ,
+               by=c("brand_lookup"="clean_brands") )
+
+# Left Join
+cart.prod.1 <- data.r.2 %>%
+    left_join( dist.df.1 %>% select( input , brand_flag ) , 
+               by=c("clean_response"="input"))
+
+# scratch
+data.r.2 %>% 
+    filter(response_id == "R_27xqubZkKUEheGW")
+```
+
+# Simple string looks and flags
+```{r}
+brand.flag.fun <- function( data.in ){
+    temp.df <- data.in
+    temp.df <- temp.df %>%
+        mutate( brand_flag = ifelse( grepl( "chipotle|chipo", clean_response )==T , 2 , brand_flag ) ,
+                brand_flag = ifelse( grepl( "firehouse|fire house", clean_response )==T , 3 , brand_flag ) ,
+                brand_flag = ifelse( grepl( "jersey" , clean_response )==T , 4 , brand_flag ) ,
+                brand_flag = ifelse( grepl( "jimmy|jimmie" , clean_response )==T , 5 , brand_flag ) ,
+                brand_flag = ifelse( grepl( "moes" , clean_response )==T , 6 , brand_flag ) ,
+                brand_flag = ifelse( grepl( "noodles world" , clean_response )==T , 7 , brand_flag ) ,
+                brand_flag = ifelse( grepl( "panda" , clean_response )==T , 8 , brand_flag ) ,
+                brand_flag = ifelse( grepl( "panera|panara" , clean_response )==T , 9 , brand_flag ) ,
+                brand_flag = ifelse( grepl( "qd" , clean_response )==T , 10 , brand_flag ) ,
+                brand_flag = ifelse( grepl( "raising" , clean_response )==T , 11 , brand_flag ) ,
+                brand_flag = ifelse( grepl( "tacobell" , clean_response )==T , 12 , brand_flag ) )
+    return( temp.df )
+}
+
+```
+
+```{r}
+# Apply the fuction
+df.1 <- brand.flag.fun( cart.prod.1 )
+
+# distinct clean_response
+df.1.dist <- df.1 %>%
+    distinct( clean_response , .keep_all=T ) %>%
+    select( clean_response , brand_flag ) %>%
+    distinct( clean_response , .keep_all=T ) %>%
+    arrange( clean_response ) %>%
+    mutate( brand_flag = as.character( brand_flag ) ) %>%
+    mutate( brand_flag = ifelse( is.na( brand_flag ) == T , "" , brand_flag ) )
+
+# write out to manual
+# write.csv( df.1.dist , "Qdoba_brand_flags_v1_out.csv" , row.names=F )
+
+# final in
+final.lookup <- read.csv( "Qdoba_brand_flags_v1.csv" )
+```
+
+This "Qdoba_brand_flags_v1.csv" is the lookup that we apply after we do text cleaning going forward.
+
+
+
+
+
+
+
+
+
+
+
+
