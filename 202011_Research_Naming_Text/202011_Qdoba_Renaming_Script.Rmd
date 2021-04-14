@@ -18,7 +18,7 @@ fun.path <- "files_for_scoring//"
 out.path <- "data_out//"
 
 # Parameters
-name.of.data.file <- "Openends_20201110.xlsx"
+name.of.data.file <- "QDOBA Q1 unaided awareness.xlsx"
 name.of.lookup.file <- "Qdoba_brand_flags_v20201110.csv"
 
 # Columns
@@ -87,8 +87,8 @@ for( i in 1:length(q_cols) ){
 
 ## Scratch
 ```{r}
-out.list.4[[5]]
-data_stack_d
+# out.list.3[[5]]
+# data_stack_d
 ```
 
 # Flag the brands now
